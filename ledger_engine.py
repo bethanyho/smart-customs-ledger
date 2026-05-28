@@ -2,6 +2,11 @@ import datetime
 import hashlib
 import pprint
 
+# --- WEEK 8 CRYPTOGRAPHY IMPORTS ---
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.exceptions import InvalidSignature
+
 # =====================================================================
 # --- CRYPTOGRAPHIC UTILITY ENCAPSULATION ---
 # =====================================================================
@@ -13,7 +18,6 @@ def calculate_block_hash(block):
     location = str(block.get("location", "UNKNOWN"))
     weight = str(block.get("cargo_weight_kg", 0.0))
     serial = str(block.get("container_serial", "🚨 UNKNOWN"))
-    # Week 6 Fix: Include the previous hash in the block footprint calculation!
     prev_hash = str(block.get("previous_hash", ""))
 
     combined_string = location + weight + serial + prev_hash
@@ -38,20 +42,105 @@ print(f"Ledger Initialized. Current Block Height: {len(blockchain_ledger)}")
 
 
 # =====================================================================
-# --- PHASE 1: MANUAL MULTI-NODE TRANSIT CHECKPOINTS ---
+# --- DAY 36: ASYMMETRIC KEY LOADING UTILITIES ---
 # =====================================================================
-
-# Rather than hardcoding dead blocks without signatures, let's use our 
-# dynamic block builder to establish our initial historical baseline nodes!
-
-def create_transit_block(location, weight, cargo_type, serial, previous_hash, aeo_id="HK-AEO-2026-DEFAULT"):
+def load_system_keys():
     """
-    Automates generation of structured blocks with millisecond stamping,
-    strict input sanitization, and cryptographically secure SHA-256 digital seals.
+    Loads local PEM files back into runtime active memory objects.
+    Returns a tuple: (private_key, public_key)
+    """
+    try:
+        # Load Private Key
+        with open("factory_private_key.pem", "rb") as priv_file:
+            private_key = serialization.load_pem_private_key(
+                priv_file.read(),
+                password=None
+            )
+        
+        # Load Public Key
+        with open("customs_public_key.pem", "rb") as pub_file:
+            public_key = serialization.load_pem_public_key(
+                pub_file.read()
+            )
+            
+        print("🔑 [SECURITY] Cryptographic Key Materials Loaded Successfully Into Runtime Memory.")
+        return private_key, public_key
+    except FileNotFoundError:
+        print("🚨 [CRITICAL] Key files missing! Run security_vault.py first to generate keys.")
+        return None, None
+
+
+# =====================================================================
+# --- DAY 37: RE-ENGINEERED RSA SIGNATURE GENERATION ---
+# =====================================================================
+def sign_cargo_manifest(private_key, data_string):
+    """
+    Encrypts a block text footprint using the private key.
+    Returns a hexadecimal signature string payload.
+    """
+    encoded_payload = data_string.encode('utf-8')
+    
+    # Generate raw binary signature using enterprise PSS padding
+    raw_signature = private_key.sign(
+        encoded_payload,
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH
+        ),
+        hashes.SHA256()
+    )
+    
+    # Convert binary payload to hex string format for easy display
+    return raw_signature.hex()
+
+
+# =====================================================================
+# --- DAY 39: RSA ASYMMETRIC VERIFICATION ENGINE ---
+# =====================================================================
+def verify_cargo_signature(public_key, block):
+    """
+    Decrypts the signature token using the public key and verifies authenticity.
+    Returns True if valid, False if altered/forged.
+    """
+    signature_hex = block.get("digital_signature", "")
+    if not signature_hex or signature_hex == "UNSIGNED_UNSECURED_SANDBOX_NODE":
+        print(f"❌ Verification Failed on Block #{block.get('block_id')}: No authentic signature payload found!")
+        return False
+        
+    location = str(block.get("location", "UNKNOWN"))
+    weight = str(block.get("cargo_weight_kg", 0.0))
+    serial = str(block.get("container_serial", "🚨 UNKNOWN"))
+    prev_hash = str(block.get("previous_hash", ""))
+    reconstructed_footprint = location + weight + serial + prev_hash
+    
+    try:
+        signature_bytes = bytes.fromhex(signature_hex)
+        
+        public_key.verify(
+            signature_bytes,
+            reconstructed_footprint.encode('utf-8'),
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256()
+        )
+        return True
+    except InvalidSignature:
+        print(f"🚨 [ALERT] FORGERY OR DATA TAMPERING DETECTED ON NODE #{block.get('block_id')}!")
+        return False
+
+
+# =====================================================================
+# --- DAY 38: UPDATED BUILDER INTEGRATING SECURITY OBJECTS ---
+# =====================================================================
+def create_transit_block(location, weight, cargo_type, serial, previous_hash, private_key=None, aeo_id="HK-AEO-2026-DEFAULT"):
+    """
+    Automates structured block generation with millisecond stamping, input sanitization,
+    cryptographic tracking hashing, and asymmetric RSA signature seals.
     """
     parsed_weight = float(weight)
     sanitized_weight = abs(parsed_weight)
-    
     millisecond_timestamp = str(datetime.datetime.now())
     dynamic_id = len(blockchain_ledger)
     
@@ -69,6 +158,14 @@ def create_transit_block(location, weight, cargo_type, serial, previous_hash, ae
     }
     
     new_block["block_hash"] = calculate_block_hash(new_block)
+    
+    # Dynamic Asymmetric Digital Signing
+    if private_key:
+        footprint_string = str(location) + str(sanitized_weight) + str(serial) + str(previous_hash)
+        new_block["digital_signature"] = sign_cargo_manifest(private_key, footprint_string)
+    else:
+        new_block["digital_signature"] = "UNSIGNED_UNSECURED_SANDBOX_NODE"
+        
     return new_block
 
 
@@ -82,14 +179,19 @@ def safe_display_block(block):
     print(f"Safe Log -> Serial: {serial} | Weight: {weight} KG | AEO ID: {aeo_id}")
 
 
-# Build Initial History (Nodes 0 to 2) using proper dynamic chaining links
-h_node_0 = create_transit_block("Guangdong AEO Manufacturing Hub", 15000.0, "High-Density Electronics", "MSKU9918273", previous_hash="0", aeo_id="HK-AEO-2026-0891")
+# Load the crypto key pairs into active system memory upfront
+priv_key, pub_key = load_system_keys()
+
+# =====================================================================
+# --- PHASE 1: MANUAL MULTI-NODE TRANSIT CHECKPOINTS ---
+# =====================================================================
+h_node_0 = create_transit_block("Guangdong AEO Manufacturing Hub", 15000.0, "High-Density Electronics", "MSKU9918273", previous_hash="0", private_key=priv_key, aeo_id="HK-AEO-2026-0891")
 blockchain_ledger.append(h_node_0)
 
-h_node_1 = create_transit_block("Port of Shenzhen (Yantian)", 15000.0, "High-Density Electronics", "MSKU9918273", previous_hash=h_node_0["block_hash"], aeo_id="SZ-PORT-2026-4403")
+h_node_1 = create_transit_block("Port of Shenzhen (Yantian)", 15000.0, "High-Density Electronics", "MSKU9918273", previous_hash=h_node_0["block_hash"], private_key=priv_key, aeo_id="SZ-PORT-2026-4403")
 blockchain_ledger.append(h_node_1)
 
-h_node_2 = create_transit_block("Kwai Tsing Container Terminal 4, HK", 15000.0, "High-Density Electronics", "MSKU9918273", previous_hash=h_node_1["block_hash"], aeo_id="HK-TERMINAL-2026-0042")
+h_node_2 = create_transit_block("Kwai Tsing Container Terminal 4, HK", 15000.0, "High-Density Electronics", "MSKU9918273", previous_hash=h_node_1["block_hash"], private_key=priv_key, aeo_id="HK-TERMINAL-2026-0042")
 blockchain_ledger.append(h_node_2)
 
 
@@ -149,7 +251,6 @@ print("\n" + "🔋 " * 20)
 print(" TESTING MILLISECOND STAMPS & WEIGHT DEFENSE")
 print("🔋 " * 20)
 
-# Extract current tail hash link dynamically before inserting
 prev_hash_calc = blockchain_ledger[-1]["block_hash"]
 
 dynamic_checkpoint = create_transit_block(
@@ -157,8 +258,9 @@ dynamic_checkpoint = create_transit_block(
     weight=-19450.80,
     cargo_type="Medical Devices & Equipment",
     serial="MSKU9918273",
-    aeo_id="HK-TM-2026-0411",
-    previous_hash=prev_hash_calc  
+    previous_hash=prev_hash_calc,
+    private_key=priv_key,
+    aeo_id="HK-TM-2026-0411"
 )
 blockchain_ledger.append(dynamic_checkpoint)
 
@@ -176,7 +278,6 @@ print(" RUNNING SYSTEM CLOCK VELOCITY STRESS CHECK")
 print("⚡ " * 20)
 
 for i in range(10):
-    # FIX #2: Extract the current running tail hash link dynamically for every cycle iteration
     current_tail_hash = blockchain_ledger[-1]["block_hash"]
     
     stress_block = create_transit_block(
@@ -184,7 +285,8 @@ for i in range(10):
         weight=20000.0,
         cargo_type="Stress Data Packets",
         serial="MSKU9918273",
-        previous_hash=current_tail_hash  # Passed tracking hash dependency
+        previous_hash=current_tail_hash,
+        private_key=priv_key
     )
     blockchain_ledger.append(stress_block)
     print(f"⚡ Minted Block #{stress_block['block_id']} | Microsecond Stamp: {stress_block['timestamp']}")
@@ -215,7 +317,8 @@ for record in raw_logistics_data:
         weight=record["wt"],
         cargo_type=record["type"],
         serial="MSKU9918273",
-        previous_hash=prev_hash_lookup
+        previous_hash=prev_hash_lookup,
+        private_key=priv_key
     )
     blockchain_ledger.append(linked_block)
 
@@ -224,7 +327,7 @@ for record in raw_logistics_data:
 # --- DAY 30: TERMINAL CHAIN VERIFICATION PORTAL ---
 # =====================================================================
 print("\n" + "📜 " * 25)
-print("              CRYPTOGRAPHIC BLOCKCHAIN AUDIT LOG")
+print("               CRYPTOGRAPHIC BLOCKCHAIN AUDIT LOG")
 print("📜 " * 25)
 
 for block in blockchain_ledger:
@@ -237,7 +340,6 @@ print(f"\n Master Ledger Verified Height: {len(blockchain_ledger)} Blocks Secure
 print("=" * 75)
 
 
-
 def run_customs_terminal_portal():
     print("\n" + "⌨️ " * 20)
     print(" HONG KONG CUSTOMS INTERACTIVE INTAKE PORTAL")
@@ -246,7 +348,6 @@ def run_customs_terminal_portal():
     user_location = input("Enter current checkpoint node location: ")
     user_weight = input("Enter declared container cargo weight (KG): ")
     
-    # FIX #1: Safely read our true current master tail block signature hash token
     last_block_hash = blockchain_ledger[-1]["block_hash"] if blockchain_ledger else "0"
 
     interactive_block = create_transit_block(
@@ -254,7 +355,8 @@ def run_customs_terminal_portal():
         weight=user_weight,
         cargo_type="Standardized AEO Cargo Segment",
         serial="MSKU9918273",
-        previous_hash=last_block_hash  # Passed tracking hash dependency
+        previous_hash=last_block_hash,
+        private_key=priv_key
     )
     
     blockchain_ledger.append(interactive_block)
@@ -265,5 +367,39 @@ def run_customs_terminal_portal():
     print(f"   🔒 CURR HASH: {interactive_block['block_hash']}")
 
 
-# Fire portal at the absolute end of runtime cycle execution
+# Fire portal at the end of historic sequence calculation
 run_customs_terminal_portal()
+
+
+# =====================================================================
+# --- DAY 40: END-TO-END SIGNATURE CONFIRMATION TEST ---
+# =====================================================================
+print("\n====================================================")
+print("        RUNNING WEEK 8 DIGITAL SIGNATURE TRIAL      ")
+print("====================================================")
+
+if priv_key and pub_key:
+    # 1. Audit check on the last block entered in our database
+    latest_block = blockchain_ledger[-1]
+    print(f"\n🔬 Auditing Latest Node Entry (Block #{latest_block['block_id']}) at {latest_block['location']}...")
+    print(f"🔏 Appended Signature: {latest_block['digital_signature'][:65]}...")
+    
+    # 2. Verify authorship through public key decryption
+    is_authentic = verify_cargo_signature(pub_key, latest_block)
+    if is_authentic:
+        print("✅ [VERIFIED]: Cryptographic asymmetric signature is valid! Authorship confirmed.")
+    else:
+        print("❌ [REJECTED]: Signature authentication validation mismatch.")
+        
+    # 3. Defensive Anti-Tamper Security Simulation Test
+    print("\n⚠️ SIMULATING AN ATTACK VECTOR (Altering block parameters)...")
+    latest_block["cargo_weight_kg"] = 99999.99  # Malicious manipulation
+    
+    print("🛂 Re-running Customs verification checkpoint...")
+    is_still_authentic = verify_cargo_signature(pub_key, latest_block)
+    if not is_still_authentic:
+        print("🛡️ [SECURITY SUCCESS]: Manifest modification caught! Attack thwarted successfully.")
+else:
+    print("❌ Setup failed. Local cryptographic key parameters are completely inaccessible.")
+
+print("====================================================")
