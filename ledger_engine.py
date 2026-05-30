@@ -1,3 +1,4 @@
+import geospatial_filter 
 import alert_coordinator
 import datetime
 import hashlib
@@ -12,50 +13,17 @@ from cryptography.exceptions import InvalidSignature
 # --- CRYPTOGRAPHIC UTILITY ENCAPSULATION ---
 # =====================================================================
 def calculate_block_hash(block):
-    """
-    Accepts a standard ledger block dictionary, extracts its core identifying fields,
-    INCLUDING the nonce tracking variable, and returns a 64-character SHA-256 signature string.
-    """
     location = str(block.get("location", "UNKNOWN"))
     weight = str(block.get("cargo_weight_kg", 0.0))
     serial = str(block.get("container_serial", "🚨 UNKNOWN"))
     prev_hash = str(block.get("previous_hash", ""))
-    # Day 52: Include nonce in the hash footprint string calculation
     nonce = str(block.get("nonce", 0))
+    # Day 74: Append new spatial parameters into the hash calculation pattern
+    lat = str(block.get("current_lat", 0.0))
+    lon = str(block.get("current_lon", 0.0))
 
-    combined_string = location + weight + serial + prev_hash + nonce
-    
-    encoded_bytes = combined_string.encode('utf-8')
-    secure_signature = hashlib.sha256(encoded_bytes).hexdigest()
-    
-    return secure_signature
-
-import time
-
-# =====================================================================
-# --- WEEK 11: PROOF-OF-WORK MINING ENGINE ---
-# =====================================================================
-def execute_proof_of_work(block, difficulty=3):
-    """
-    Day 51 & 53: Computational lock mechanism. Increments a dummy variable (nonce) 
-    until the resulting SHA-256 block hash begins with a target number of leading zeros.
-    """
-    target_prefix = "0" * difficulty
-    start_time = time.time()
-    
-    # Day 52: Initialize nonce field inside the block dictionary to 0
-    block["nonce"] = 0
-    
-    # Day 53: Core Mining loop
-    while True:
-        current_hash = calculate_block_hash(block)
-        if current_hash.startswith(target_prefix):
-            end_time = time.time()
-            duration = end_time - start_time
-            print(f"⛏️  [MINING SUCCESS] Block #{block.get('block_id')} Locked! Nonce: {block['nonce']} | Time: {duration:.4f}s | Hash: {current_hash}")
-            return current_hash
-        
-        block["nonce"] += 1
+    combined_string = location + weight + serial + prev_hash + nonce + lat + lon
+    return hashlib.sha256(combined_string.encode('utf-8')).hexdigest()
 
 
 
@@ -225,6 +193,26 @@ def run_system_integrity_audit(ledger, public_key=None):
                 alert_coordinator.quarantine_corrupted_manifest(current_block, violation)
                 ledger.pop(idx)
                 break
+
+        # --- LAYER 4: REAL-TIME SPATIAL CORRIDOR COMPLIANCE CHECK ---
+        # Day 74 & 79: Extract the spatial coordinates from the block layout
+        lat = current_block.get("current_lat", 0.0)
+        lon = current_block.get("current_lon", 0.0)
+        
+        # Pass the extracted points through your Day 75 & Day 76 compliance math
+        is_spatial_valid, deviation_dist = geospatial_filter.check_spatial_corridor_compliance(lat, lon)
+        risk_profile, risk_msg = geospatial_filter.classify_spatial_risk_severity(deviation_dist)
+        
+        # Day 78 & 79: If the detour severity crosses our threshold, route to containment
+        if risk_profile == "HIGH_RISK_DEVIATION":
+            violation = f"High-Risk Route Deviation Anomaly ({risk_msg})"
+            is_compromised = True
+            
+            # Fire the alarm framework and isolate the block
+            alert_coordinator.dispatch_customs_alarm(violation, current_block)
+            alert_coordinator.quarantine_corrupted_manifest(current_block, violation)
+            ledger.pop(idx)
+            break
                 
         idx += 1
                 
@@ -232,12 +220,10 @@ def run_system_integrity_audit(ledger, public_key=None):
         print(f"✅ [AUDIT SUCCESS] All {len(ledger)} nodes parsed smoothly. Ledger state verified as CLEAN.")
         
     return is_compromised
-
-
 # =====================================================================
 # --- DAY 38: UPDATED BUILDER INTEGRATING SECURITY OBJECTS ---
 # =====================================================================
-def create_transit_block(location, weight, cargo_type, serial, previous_hash, private_key=None, aeo_id="HK-AEO-2026-DEFAULT"):
+def create_transit_block(location, weight, cargo_type, serial, previous_hash, current_lat=22.2500, current_lon=114.1000, private_key=None, aeo_id="HK-AEO-2026-DEFAULT"):
     parsed_weight = float(weight)
     sanitized_weight = abs(parsed_weight)
     millisecond_timestamp = str(datetime.datetime.now())
@@ -254,17 +240,17 @@ def create_transit_block(location, weight, cargo_type, serial, previous_hash, pr
         "cargo_type": cargo_type,
         "status": "CHAINED LOGISTICS NODE",
         "previous_hash": previous_hash,
-        "nonce": 0  # Day 52 Initialization default
+        # Day 74: Insert coordinates inside structural layout fields
+        "current_lat": float(current_lat),
+        "current_lon": float(current_lon),
+        "nonce": 0  
     }
     
-    # Day 54: Integrate Proof-of-Work pipeline directly before finalize
-    # Difficulty set to default 3 for optimal balanced throughput performance
     new_block["block_hash"] = execute_proof_of_work(new_block, difficulty=3)
     
-    # Dynamic Asymmetric Digital Signing (Uses the mined block hash characteristics)
     if private_key:
-        # Re-construct identical layout with matching parameters
-        footprint_string = str(location) + str(sanitized_weight) + str(serial) + str(previous_hash) + str(new_block["nonce"])
+        # Re-construct signature block tracking string identically
+        footprint_string = str(location) + str(sanitized_weight) + str(serial) + str(previous_hash) + str(new_block["nonce"]) + str(float(current_lat)) + str(float(current_lon))
         new_block["digital_signature"] = sign_cargo_manifest(private_key, footprint_string)
     else:
         new_block["digital_signature"] = "UNSIGNED_UNSECURED_SANDBOX_NODE"
@@ -475,48 +461,45 @@ run_customs_terminal_portal()
 
 
 # =====================================================================
-# --- WEEKS 13 & 14: FULL PIPELINE AUTOMATION TEST ---
+# --- WEEKS 15 & 16: INTEGRATED GEOSPATIAL SIMULATION SUITE ---
 # =====================================================================
 if __name__ == "__main__":
     print("\n====================================================")
-    print("   STAGE 3: FULL PRODUCTION QUARANTINE PIPELINE TEST ")
+    print("   STAGE 4: INTEGRATED GEOSPATIAL CORRIDOR SIMULATION")
     print("====================================================")
     
-    # 1. Clear any old quarantine logs from prior executions if they exist
-    if os.path.exists("quarantined_manifests.json"):
-        os.remove("quarantined_manifests.json")
-
-    # 2. Inject 5 intentionally corrupted data blocks into the system (Day 65 / Day 70)
-    print("\n⚠️ Simulating Attack Vector: Injecting 5 corrupted freight manifests into database array...")
-    initial_count = len(blockchain_ledger)
+    # Reinitalize clean sandboxed testing history tracking layout arrays
+    spatial_test_ledger = []
     
-    for i in range(5):
-        malicious_node = {
-            "block_id": 999 + i,
-            "timestamp": str(datetime.datetime.now()),
-            "location": f"Simulated Black-Market Warehouse Annex-{i}",
-            "container_serial": f"FAKE-SERIAL-00{i}",
-            "cargo_weight_kg": 9999.9,
-            "previous_hash": "CORRUPTED_PARENT_LINK_STUB",
-            "block_hash": "CORRUPTED_CURRENT_HASH_STUB",
-            "digital_signature": "UNSIGNED_UNSECURED_SANDBOX_NODE"
-        }
-        blockchain_ledger.append(malicious_node)
-        
-    print(f"📊 Ledger Height with Corrupted Injections: {len(blockchain_ledger)} Blocks.")
+    # 1. Append a completely valid block (Inside Channel Lanes)
+    print("\n🚢 Minting Vessel Block Alpha (On-Track Shipping Lane)...")
+    block_alpha = create_transit_block(
+        location="Lamma Channel Inbound Approach", weight=15000.0, cargo_type="Electronics",
+        serial="MSKU9918273", previous_hash="0", current_lat=22.2100, current_lon=114.0700, private_key=priv_key
+    )
+    spatial_test_ledger.append(block_alpha)
     
-    # 3. Fire the automated audit engine loop
-    print("\n🛂 Customs executing automated audit with active quarantine protocol active...")
-    run_system_integrity_audit(blockchain_ledger, pub_key)
+    # 2. Append a block with minor drifting characteristics (Minor Adjustment - Low Risk)
+    print("\n🚢 Minting Vessel Block Beta (Slightly Drifted Outer Channel Edge)...")
+    block_beta = create_transit_block(
+        location="Outer Channel Flank Checkpoint", weight=15000.0, cargo_type="Electronics",
+        serial="MSKU9918273", previous_hash=block_alpha["block_hash"], current_lat=22.2600, current_lon=114.0400, private_key=priv_key
+    )
+    spatial_test_ledger.append(block_beta)
     
-    # 4. Verify the active ledger size dropped back down
-    print("\n====================================================")
-    print("                  FINAL SYSTEM STATUS                ")
+    # 3. Append a severely deviated block (High-Risk Deviation Anomaly)
+    print("\n🚢 Minting Vessel Block Gamma (Severely Deviated Near Remote Island Smuggling Blackspot)...")
+    block_gamma = create_transit_block(
+        location="Unapproved Shoreline Incursion Zone", weight=15000.0, cargo_type="Electronics",
+        serial="MSKU9918273", previous_hash=block_beta["block_hash"], current_lat=22.5100, current_lon=113.7200, private_key=priv_key
+    )
+    spatial_test_ledger.append(block_gamma)
+    
+    print(f"\n📊 Initial Spatial Ledger Height: {len(spatial_test_ledger)} Blocks.")
+    
+    # 4. Fire the automated background audit engine loop to catch spatial anomalies
+    print("\n🛂 Customs launching real-time spatial path validation audit...")
+    run_system_integrity_audit(spatial_test_ledger, pub_key)
+    
+    print(f"\n📦 Final Active Spatial Ledger Height: {len(spatial_test_ledger)} Blocks (High-risk threats extracted to quarantine file).")
     print("====================================================")
-    print(f"📦 Remaining clean ledger height: {len(blockchain_ledger)} Blocks.")
-    
-    if os.path.exists("quarantined_manifests.json"):
-        print("📁 Evidence verification check: 'quarantined_manifests.json' exists on disk.")
-        with open("quarantined_manifests.json", "r") as f:
-            log_data = json.load(f)
-        print(f"🔒 Total threat records isolated in local silo file: {len(log_data)}")
