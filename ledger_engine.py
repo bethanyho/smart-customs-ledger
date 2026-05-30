@@ -132,6 +132,69 @@ def verify_cargo_signature(public_key, block):
 
 
 # =====================================================================
+# --- WEEKS 9 & 10: UNIFIED SYSTEM INTEGRITY AUDIT LOOP (📍 ADDED HERE) ---
+# =====================================================================
+def run_system_integrity_audit(ledger, public_key=None):
+    """
+    Sequentially audits the entire ledger array using a three-layer defensive check:
+    1. Chaining Link Validation (Hash of Block N-1 == Previous Hash of Block N)
+    2. Data Recalculation Verification (Stored Block Hash == Re-computed Data Hash)
+    3. Asymmetric RSA Signature Verification (Proves genuine authorship)
+    
+    Returns: True if the ledger is COMPROMISED, False if it is COMPLETELY CLEAN.
+    """
+    print("\n🔍 [AUDIT] Initializing Continuous Master Security Audit Scan...")
+    
+    if not ledger:
+        print("ℹ️ Ledger is completely empty. Scan skipped.")
+        return False
+
+    is_compromised = False
+
+    for idx in range(1, len(ledger)):
+        current_block = ledger[idx]
+        parent_block = ledger[idx - 1]
+        
+        # LAYER 1: CHAINING LINK VALIDATION (Week 9)
+        stored_prev_hash = current_block.get("previous_hash", "")
+        actual_parent_hash = parent_block.get("block_hash", "")
+        
+        if stored_prev_hash != actual_parent_hash:
+            print(f"\n🚨 [CRITICAL LINK BREACH] Broken Cryptographic Chain Link Detected!")
+            print(f"   ↳ Fault Location: Block #{current_block.get('block_id')} at {current_block.get('location')}")
+            print(f"   ↳ Stored 'previous_hash': {stored_prev_hash}")
+            print(f"   ↳ True Parent 'block_hash': {actual_parent_hash}")
+            is_compromised = True
+            break
+
+        # LAYER 2: DATA RECALCULATION VALIDATION (Week 10)
+        stored_current_hash = current_block.get("block_hash", "")
+        recalculated_hash = calculate_block_hash(current_block)
+        
+        if stored_current_hash != recalculated_hash:
+            print(f"\n🚨 [DATA MANIPULATION DETECTED] Internal Block Parameters Altered!")
+            print(f"   ↳ Compromised Node: Block #{current_block.get('block_id')} at {current_block.get('location')}")
+            print(f"   ↳ Stored Hash Column:   {stored_current_hash}")
+            print(f"   ↳ Recalculated Profile: {recalculated_hash}")
+            is_compromised = True
+            break
+
+        # LAYER 3: RSA DIGITAL SIGNATURE VALIDATION (Week 10)
+        if public_key:
+            is_signature_valid = verify_cargo_signature(public_key, current_block)
+            if not is_signature_valid:
+                print(f"\n🚨 [SIGNATURE FORGERY DETECTED] Invalid Authorship Seal!")
+                print(f"   ↳ Counterfeit Target: Block #{current_block.get('block_id')} at {current_block.get('location')}")
+                is_compromised = True
+                break
+                
+    if not is_compromised:
+        print(f"✅ [AUDIT SUCCESS] All {len(ledger)} nodes parsed smoothly. Ledger state verified as CLEAN.")
+        
+    return is_compromised
+
+
+# =====================================================================
 # --- DAY 38: UPDATED BUILDER INTEGRATING SECURITY OBJECTS ---
 # =====================================================================
 def create_transit_block(location, weight, cargo_type, serial, previous_hash, private_key=None, aeo_id="HK-AEO-2026-DEFAULT"):
@@ -372,34 +435,39 @@ run_customs_terminal_portal()
 
 
 # =====================================================================
-# --- DAY 40: END-TO-END SIGNATURE CONFIRMATION TEST ---
+# --- SYSTEM INTEGRITY TRIAL EXECUTION SUITE (📍 NEW WEEKS 9 & 10 REPLACEMENT) ---
 # =====================================================================
 print("\n====================================================")
-print("        RUNNING WEEK 8 DIGITAL SIGNATURE TRIAL      ")
+print("      STAGE 1: CLEAN WORKSPACE SYSTEM INTEGRITY AUDIT  ")
 print("====================================================")
 
-if priv_key and pub_key:
-    # 1. Audit check on the last block entered in our database
-    latest_block = blockchain_ledger[-1]
-    print(f"\n🔬 Auditing Latest Node Entry (Block #{latest_block['block_id']}) at {latest_block['location']}...")
-    print(f"🔏 Appended Signature: {latest_block['digital_signature'][:65]}...")
-    
-    # 2. Verify authorship through public key decryption
-    is_authentic = verify_cargo_signature(pub_key, latest_block)
-    if is_authentic:
-        print("✅ [VERIFIED]: Cryptographic asymmetric signature is valid! Authorship confirmed.")
-    else:
-        print("❌ [REJECTED]: Signature authentication validation mismatch.")
-        
-    # 3. Defensive Anti-Tamper Security Simulation Test
-    print("\n⚠️ SIMULATING AN ATTACK VECTOR (Altering block parameters)...")
-    latest_block["cargo_weight_kg"] = 99999.99  # Malicious manipulation
-    
-    print("🛂 Re-running Customs verification checkpoint...")
-    is_still_authentic = verify_cargo_signature(pub_key, latest_block)
-    if not is_still_authentic:
-        print("🛡️ [SECURITY SUCCESS]: Manifest modification caught! Attack thwarted successfully.")
-else:
-    print("❌ Setup failed. Local cryptographic key parameters are completely inaccessible.")
+# Run audit loop against baseline pristine logs (Day 45 / Day 50 confirmation)
+system_compromised = run_system_integrity_audit(blockchain_ledger, pub_key)
+print(f"📊 Global System Compromise Flag Status: {system_compromised}")
 
+print("\n====================================================")
+print("      STAGE 2: COVERT CYBER ATTACK SIMULATION AUDIT   ")
+print("====================================================")
+
+# Pick an older block inside the ledger to simulate a security breach
+target_malicious_index = 2
+compromised_node = blockchain_ledger[target_malicious_index]
+
+print(f"⚠️ Exploit Active: Injecting fake cargo weight parameters into historical Node #{compromised_node['block_id']}...")
+print(f"   ↳ Location: {compromised_node['location']}")
+print(f"   ↳ Authentic Weight: {compromised_node['cargo_weight_kg']} KG")
+
+# Hacker directly manipulates the data structure column variables 
+compromised_node["cargo_weight_kg"] = 88888.88 
+print(f"   ↳ Illicit Altered Weight: {compromised_node['cargo_weight_kg']} KG")
+
+# Re-run loop to confirm multi-layered catching functionality works
+print("\n🛂 Customs executing background multi-layered audit cycle...")
+system_compromised = run_system_integrity_audit(blockchain_ledger, pub_key)
+
+if system_compromised:
+    print("\n🛡️ [SECURITY SUCCESS] Master Audit successfully caught the data tampering exploit!")
+else:
+    print("\n❌ [SECURITY BREACH] Audit loop failed to notice the modification.")
+    
 print("====================================================")
