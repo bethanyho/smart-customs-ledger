@@ -1,3 +1,4 @@
+import alert_coordinator
 import datetime
 import hashlib
 import pprint
@@ -167,12 +168,8 @@ def verify_cargo_signature(public_key, block):
 # =====================================================================
 def run_system_integrity_audit(ledger, public_key=None):
     """
-    Sequentially audits the entire ledger array using a three-layer defensive check:
-    1. Chaining Link Validation (Hash of Block N-1 == Previous Hash of Block N)
-    2. Data Recalculation Verification (Stored Block Hash == Re-computed Data Hash)
-    3. Asymmetric RSA Signature Verification (Proves genuine authorship)
-    
-    Returns: True if the ledger is COMPROMISED, False if it is COMPLETELY CLEAN.
+    Audits the entire ledger. If a compromise is hit, it drops the compromised block
+    from the live list, dispatches a frontline alert, and dumps the evidence to a JSON file.
     """
     print("\n🔍 [AUDIT] Initializing Continuous Master Security Audit Scan...")
     
@@ -182,42 +179,54 @@ def run_system_integrity_audit(ledger, public_key=None):
 
     is_compromised = False
 
-    for idx in range(1, len(ledger)):
+    # Using a while loop or an index-controlled scan so we can modify the list safely
+    idx = 1
+    while idx < len(ledger):
         current_block = ledger[idx]
         parent_block = ledger[idx - 1]
         
-        # LAYER 1: CHAINING LINK VALIDATION (Week 9)
+        # --- LAYER 1: CHAINING LINK VALIDATION ---
         stored_prev_hash = current_block.get("previous_hash", "")
         actual_parent_hash = parent_block.get("block_hash", "")
         
         if stored_prev_hash != actual_parent_hash:
-            print(f"\n🚨 [CRITICAL LINK BREACH] Broken Cryptographic Chain Link Detected!")
-            print(f"   ↳ Fault Location: Block #{current_block.get('block_id')} at {current_block.get('location')}")
-            print(f"   ↳ Stored 'previous_hash': {stored_prev_hash}")
-            print(f"   ↳ True Parent 'block_hash': {actual_parent_hash}")
+            violation = "Cryptographic Chain Link Break"
             is_compromised = True
+            
+            # Week 13: Dispatch terminal alarm frame
+            alert_coordinator.dispatch_customs_alarm(violation, current_block)
+            # Week 14: Route to disk quarantine file
+            alert_coordinator.quarantine_corrupted_manifest(current_block, violation)
+            # Week 14: Evict compromised node from live runtime ledger
+            ledger.pop(idx)
             break
 
-        # LAYER 2: DATA RECALCULATION VALIDATION (Week 10)
+        # --- LAYER 2: DATA RECALCULATION VALIDATION ---
         stored_current_hash = current_block.get("block_hash", "")
         recalculated_hash = calculate_block_hash(current_block)
         
         if stored_current_hash != recalculated_hash:
-            print(f"\n🚨 [DATA MANIPULATION DETECTED] Internal Block Parameters Altered!")
-            print(f"   ↳ Compromised Node: Block #{current_block.get('block_id')} at {current_block.get('location')}")
-            print(f"   ↳ Stored Hash Column:   {stored_current_hash}")
-            print(f"   ↳ Recalculated Profile: {recalculated_hash}")
+            violation = "Internal Parameter Data Manipulation"
             is_compromised = True
+            
+            alert_coordinator.dispatch_customs_alarm(violation, current_block)
+            alert_coordinator.quarantine_corrupted_manifest(current_block, violation)
+            ledger.pop(idx)
             break
 
-        # LAYER 3: RSA DIGITAL SIGNATURE VALIDATION (Week 10)
+        # --- LAYER 3: RSA DIGITAL SIGNATURE VALIDATION ---
         if public_key:
             is_signature_valid = verify_cargo_signature(public_key, current_block)
             if not is_signature_valid:
-                print(f"\n🚨 [SIGNATURE FORGERY DETECTED] Invalid Authorship Seal!")
-                print(f"   ↳ Counterfeit Target: Block #{current_block.get('block_id')} at {current_block.get('location')}")
+                violation = "Asymmetric RSA Signature Forgery / Invalid Authorship"
                 is_compromised = True
+                
+                alert_coordinator.dispatch_customs_alarm(violation, current_block)
+                alert_coordinator.quarantine_corrupted_manifest(current_block, violation)
+                ledger.pop(idx)
                 break
+                
+        idx += 1
                 
     if not is_compromised:
         print(f"✅ [AUDIT SUCCESS] All {len(ledger)} nodes parsed smoothly. Ledger state verified as CLEAN.")
@@ -466,39 +475,48 @@ run_customs_terminal_portal()
 
 
 # =====================================================================
-# --- SYSTEM INTEGRITY TRIAL EXECUTION SUITE (📍 NEW WEEKS 9 & 10 REPLACEMENT) ---
+# --- WEEKS 13 & 14: FULL PIPELINE AUTOMATION TEST ---
 # =====================================================================
-print("\n====================================================")
-print("      STAGE 1: CLEAN WORKSPACE SYSTEM INTEGRITY AUDIT  ")
-print("====================================================")
-
-# Run audit loop against baseline pristine logs (Day 45 / Day 50 confirmation)
-system_compromised = run_system_integrity_audit(blockchain_ledger, pub_key)
-print(f"📊 Global System Compromise Flag Status: {system_compromised}")
-
-print("\n====================================================")
-print("      STAGE 2: COVERT CYBER ATTACK SIMULATION AUDIT   ")
-print("====================================================")
-
-# Pick an older block inside the ledger to simulate a security breach
-target_malicious_index = 2
-compromised_node = blockchain_ledger[target_malicious_index]
-
-print(f"⚠️ Exploit Active: Injecting fake cargo weight parameters into historical Node #{compromised_node['block_id']}...")
-print(f"   ↳ Location: {compromised_node['location']}")
-print(f"   ↳ Authentic Weight: {compromised_node['cargo_weight_kg']} KG")
-
-# Hacker directly manipulates the data structure column variables 
-compromised_node["cargo_weight_kg"] = 88888.88 
-print(f"   ↳ Illicit Altered Weight: {compromised_node['cargo_weight_kg']} KG")
-
-# Re-run loop to confirm multi-layered catching functionality works
-print("\n🛂 Customs executing background multi-layered audit cycle...")
-system_compromised = run_system_integrity_audit(blockchain_ledger, pub_key)
-
-if system_compromised:
-    print("\n🛡️ [SECURITY SUCCESS] Master Audit successfully caught the data tampering exploit!")
-else:
-    print("\n❌ [SECURITY BREACH] Audit loop failed to notice the modification.")
+if __name__ == "__main__":
+    print("\n====================================================")
+    print("   STAGE 3: FULL PRODUCTION QUARANTINE PIPELINE TEST ")
+    print("====================================================")
     
-print("====================================================")
+    # 1. Clear any old quarantine logs from prior executions if they exist
+    if os.path.exists("quarantined_manifests.json"):
+        os.remove("quarantined_manifests.json")
+
+    # 2. Inject 5 intentionally corrupted data blocks into the system (Day 65 / Day 70)
+    print("\n⚠️ Simulating Attack Vector: Injecting 5 corrupted freight manifests into database array...")
+    initial_count = len(blockchain_ledger)
+    
+    for i in range(5):
+        malicious_node = {
+            "block_id": 999 + i,
+            "timestamp": str(datetime.datetime.now()),
+            "location": f"Simulated Black-Market Warehouse Annex-{i}",
+            "container_serial": f"FAKE-SERIAL-00{i}",
+            "cargo_weight_kg": 9999.9,
+            "previous_hash": "CORRUPTED_PARENT_LINK_STUB",
+            "block_hash": "CORRUPTED_CURRENT_HASH_STUB",
+            "digital_signature": "UNSIGNED_UNSECURED_SANDBOX_NODE"
+        }
+        blockchain_ledger.append(malicious_node)
+        
+    print(f"📊 Ledger Height with Corrupted Injections: {len(blockchain_ledger)} Blocks.")
+    
+    # 3. Fire the automated audit engine loop
+    print("\n🛂 Customs executing automated audit with active quarantine protocol active...")
+    run_system_integrity_audit(blockchain_ledger, pub_key)
+    
+    # 4. Verify the active ledger size dropped back down
+    print("\n====================================================")
+    print("                  FINAL SYSTEM STATUS                ")
+    print("====================================================")
+    print(f"📦 Remaining clean ledger height: {len(blockchain_ledger)} Blocks.")
+    
+    if os.path.exists("quarantined_manifests.json"):
+        print("📁 Evidence verification check: 'quarantined_manifests.json' exists on disk.")
+        with open("quarantined_manifests.json", "r") as f:
+            log_data = json.load(f)
+        print(f"🔒 Total threat records isolated in local silo file: {len(log_data)}")
