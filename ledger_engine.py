@@ -13,19 +13,50 @@ from cryptography.exceptions import InvalidSignature
 def calculate_block_hash(block):
     """
     Accepts a standard ledger block dictionary, extracts its core identifying fields,
-    and returns an immutable 64-character SHA-256 signature string.
+    INCLUDING the nonce tracking variable, and returns a 64-character SHA-256 signature string.
     """
     location = str(block.get("location", "UNKNOWN"))
     weight = str(block.get("cargo_weight_kg", 0.0))
     serial = str(block.get("container_serial", "🚨 UNKNOWN"))
     prev_hash = str(block.get("previous_hash", ""))
+    # Day 52: Include nonce in the hash footprint string calculation
+    nonce = str(block.get("nonce", 0))
 
-    combined_string = location + weight + serial + prev_hash
+    combined_string = location + weight + serial + prev_hash + nonce
     
     encoded_bytes = combined_string.encode('utf-8')
     secure_signature = hashlib.sha256(encoded_bytes).hexdigest()
     
     return secure_signature
+
+import time
+
+# =====================================================================
+# --- WEEK 11: PROOF-OF-WORK MINING ENGINE ---
+# =====================================================================
+def execute_proof_of_work(block, difficulty=3):
+    """
+    Day 51 & 53: Computational lock mechanism. Increments a dummy variable (nonce) 
+    until the resulting SHA-256 block hash begins with a target number of leading zeros.
+    """
+    target_prefix = "0" * difficulty
+    start_time = time.time()
+    
+    # Day 52: Initialize nonce field inside the block dictionary to 0
+    block["nonce"] = 0
+    
+    # Day 53: Core Mining loop
+    while True:
+        current_hash = calculate_block_hash(block)
+        if current_hash.startswith(target_prefix):
+            end_time = time.time()
+            duration = end_time - start_time
+            print(f"⛏️  [MINING SUCCESS] Block #{block.get('block_id')} Locked! Nonce: {block['nonce']} | Time: {duration:.4f}s | Hash: {current_hash}")
+            return current_hash
+        
+        block["nonce"] += 1
+
+
 
 
 def initialize_system():
@@ -198,10 +229,6 @@ def run_system_integrity_audit(ledger, public_key=None):
 # --- DAY 38: UPDATED BUILDER INTEGRATING SECURITY OBJECTS ---
 # =====================================================================
 def create_transit_block(location, weight, cargo_type, serial, previous_hash, private_key=None, aeo_id="HK-AEO-2026-DEFAULT"):
-    """
-    Automates structured block generation with millisecond stamping, input sanitization,
-    cryptographic tracking hashing, and asymmetric RSA signature seals.
-    """
     parsed_weight = float(weight)
     sanitized_weight = abs(parsed_weight)
     millisecond_timestamp = str(datetime.datetime.now())
@@ -217,14 +244,18 @@ def create_transit_block(location, weight, cargo_type, serial, previous_hash, pr
         "cargo_weight_kg": sanitized_weight, 
         "cargo_type": cargo_type,
         "status": "CHAINED LOGISTICS NODE",
-        "previous_hash": previous_hash  
+        "previous_hash": previous_hash,
+        "nonce": 0  # Day 52 Initialization default
     }
     
-    new_block["block_hash"] = calculate_block_hash(new_block)
+    # Day 54: Integrate Proof-of-Work pipeline directly before finalize
+    # Difficulty set to default 3 for optimal balanced throughput performance
+    new_block["block_hash"] = execute_proof_of_work(new_block, difficulty=3)
     
-    # Dynamic Asymmetric Digital Signing
+    # Dynamic Asymmetric Digital Signing (Uses the mined block hash characteristics)
     if private_key:
-        footprint_string = str(location) + str(sanitized_weight) + str(serial) + str(previous_hash)
+        # Re-construct identical layout with matching parameters
+        footprint_string = str(location) + str(sanitized_weight) + str(serial) + str(previous_hash) + str(new_block["nonce"])
         new_block["digital_signature"] = sign_cargo_manifest(private_key, footprint_string)
     else:
         new_block["digital_signature"] = "UNSIGNED_UNSECURED_SANDBOX_NODE"
